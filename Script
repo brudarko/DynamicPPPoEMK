@@ -1,0 +1,49 @@
+# Credenciais No-IP
+
+:local noipUsername "E-mail"
+:local noipPassword "Senha"
+:local noipHostname "DynamicHost"
+:local wanInterface "pppoe-out1"
+
+# Log
+
+:local logDestination "/disk1/logs/"
+
+#-------------------------------------------------------------------------------------------------------------------------
+
+:log warning message="No-IP: Atualização de DynamicDNS: Script por Bruno Gabriel."
+
+:if ([/interface get $wanInterface value-name=running] = true) do={
+
+    :local previousIP [:resolve "$noipHostname"]
+
+    :local currentIP [/ip address get [find interface="$wanInterface" disabled=no] address]
+
+    :for i from=([:len $currentIP] - 1) to=0 do={
+        :if ([:pick $currentIP $i] = "/") do={
+            :set currentIP [:pick $currentIP 0 $i]
+        }
+    }
+
+    :log info "No-IP: DNS IP ($previousIP), interface IP ($currentIP)"
+    
+    :if ($currentIP != $previousIP) do={
+        :log info "No-IP: IP $currentIP não é igual ao último IP, atualização necessária."
+
+        :local url "http://dynupdate.no-ip.com/nic/update\3Fmyip=$currentIP"
+        :local noipHostnames
+        :set noipHostnames [:toarray $noipHostname]
+        :foreach hostname in=$noipHostnames do={
+            :log info "No-IP: Enviando atualização para $hostname"
+            /tool fetch url=($url . "&hostname=$hostname") user=$noipUsername password=$noipPassword mode=http dst-path=($logDestination . "no-ip_ddns_update-" . $hostname . ".txt")
+            :log info "No-IP: Host $hostname atualizado com o IP $currentIP"
+        }
+    }   else={
+        :log info "No-IP: IP $previousIP é igual ao atual, atualização não necessária."
+        }
+
+}   else={
+    :log info "No-IP: $wanInterface não está rodando, impossível verificar IP."
+    }
+    
+:log warning message="Update não realizado."
